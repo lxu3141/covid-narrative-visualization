@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>COVID Deaths by Country</title>
+  <script src="https://d3js.org/d3.v6.min.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 30px;
+    }
+    .bar {
+      fill: steelblue;
+    }
+    .bar:hover {
+      fill: orange;
+    }
+    .axis-label {
+      font-size: 14px;
+      font-weight: bold;
+    }
+    .tooltip {
+      position: absolute;
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 5px;
+      font-size: 12px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <h2>Top 10 Countries by Total COVID Deaths</h2>
+  <p>
+    This bar chart shows the 10 countries with the highest total number of COVID-19 deaths in 2022. 
+    Hover over a bar to view more details about each country, including GDP per capita, 
+    population, and death rate.
+  </p>
+  <p>
+    You may explore these countries or continue to the next scene
+    to see how wealth relates to death rates.
+  </p>
+  
+  <svg width="800" height="500"></svg>
+
+  <div style="margin-top: 30px;">
+    <button id="nextSceneBtn" style="margin-left: 10px;">Next Scene →</button>
+  </div>
+
+  <script>
+    const tooltip = d3.select("body")
+  .append("div")
+  .attr("class", "tooltip")
+  .style("opacity", 0);
+
+    d3.csv("final_merged_scene1.csv").then(function(data) {
+
+      data.forEach(d => {
+        d.TotalDeaths = +d.TotalDeaths;
+        d.GDPPerCapita = +d.GDPPerCapita;
+        d.Population = +d.Population;
+        d.DeathRate = +d.DeathRate;
+
+      });
+
+      data.sort((a, b) => d3.descending(a.TotalDeaths, b.TotalDeaths));
+        const top10 = data.filter(d => !isNaN(d.TotalDeaths)).slice(0, 10);
+
+      const margin = {top: 40, right: 20, bottom: 80, left: 100},
+            width = 800 - margin.left - margin.right,
+            height = 500 - margin.top - margin.bottom;
+
+      const svg = d3.select("svg")
+        .append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+      const x = d3.scaleBand()
+        .domain(top10.map(d => d.Country))
+        .range([0, width])
+        .padding(0.2);
+
+      const y = d3.scaleLinear()
+        .domain([0, d3.max(top10, d => d.TotalDeaths)])
+        .nice()
+        .range([height, 0]);
+
+      svg.append("g")
+        .attr("transform", `translate(0,${height})`)
+        .call(d3.axisBottom(x))
+        .selectAll("text")
+          .attr("transform", "rotate(-40)")
+          .style("text-anchor", "end");
+
+      svg.append("g")
+        .call(d3.axisLeft(y));
+
+      svg.selectAll(".bar")
+        .data(top10)
+        .enter()
+        .append("rect")
+          .attr("class", "bar")
+          .attr("x", d => x(d.Country))
+          .attr("width", x.bandwidth())
+          .attr("y", d => y(d.TotalDeaths))
+          .attr("height", d => height - y(d.TotalDeaths))
+          .on("mouseover", function(event, d) {
+      tooltip.transition().duration(200).style("opacity", 0.95);
+      tooltip.html(
+        `<b>${d.Country}</b><br>
+        Total Deaths: ${d.TotalDeaths.toLocaleString()}<br>
+        GDP per Capita: $${(+d.GDPPerCapita).toLocaleString()}<br>
+        Population: ${(+d.Population).toLocaleString()}<br>
+        Deaths per 100k: ${(+d.DeathRate).toFixed(1)}`
+        )
+      .style("left", (event.pageX + 10) + "px")
+      .style("top", (event.pageY - 28) + "px");
+    })
+    .on("mouseout", function() {
+      tooltip.transition().duration(300).style("opacity", 0);
+    });
+    ;
+
+
+      svg.append("text")
+        .attr("x", width / 2)
+        .attr("y", height + 70)
+        .attr("text-anchor", "middle")
+        .attr("class", "axis-label")
+        .text("Country");
+
+      svg.append("text")
+        .attr("x", -height / 2)
+        .attr("y", -60)
+        .attr("transform", "rotate(-90)")
+        .attr("text-anchor", "middle")
+        .attr("class", "axis-label")
+        .text("Total Deaths");
+    });
+
+    document.getElementById("nextSceneBtn").addEventListener("click", function() {
+    window.location.href = "scene2.html"; 
+    });
+
+
+
+    
+  </script>
+</body>
+</html>

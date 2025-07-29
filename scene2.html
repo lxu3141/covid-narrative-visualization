@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>COVID Death Rate vs GDP</title>
+  <script src="https://d3js.org/d3.v6.min.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 30px;
+    }
+    .dot {
+      fill: steelblue;
+      opacity: 0.7;
+    }
+    .dot:hover {
+      fill: orange;
+    }
+    .axis-label {
+      font-size: 14px;
+      font-weight: bold;
+    }
+    .tooltip {
+      position: absolute;
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 5px;
+      font-size: 12px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <h2>COVID Death Rate vs GDP per Capita</h2>
+  <p>
+    This scatter plot compares each country's GDP per capita with its COVID-19 death rate in 2022 
+    (deaths per 100,000 people). Each circle represents a country. You can hover over a dot 
+    to explore details such as population, total deaths, and GDP.
+  </p>
+  <p>
+    You may explore any countries of interest here, or continue to the next scene.
+  </p>  
+  <svg width="800" height="500"></svg>
+
+  <div style="margin-top: 30px;">
+    <button id="prevSceneBtn">← Previous Scene</button>
+    <button id="nextSceneBtn" style="margin-left: 10px;">Next Scene →</button>
+  </div>
+
+  <script>
+    const tooltip = d3.select("body")
+      .append("div")
+      .attr("class", "tooltip")
+      .style("opacity", 0);
+
+    d3.csv("final_merged_scene2.csv").then(function(data) {
+      data.forEach(d => {
+        d.GDPPerCapita = +d.GDPPerCapita;
+        d.DeathRate = +d.DeathRate;
+        d.Population = +d.Population;
+        d.TotalDeaths = +d.TotalDeaths;
+      });
+
+      const colorScale = d3.scaleOrdinal()
+      .domain(["Low income", "Lower middle income", "Upper middle income", "High income", "Unknown"])
+      .range(["#d73027", "#fc8d59", "#fee08b", "#91bfdb", "#cccccc"]);
+
+
+      const filtered = data.filter(d => !isNaN(d.GDPPerCapita) && !isNaN(d.DeathRate));
+
+      const margin = {top: 40, right: 20, bottom: 60, left: 80},
+            width = 800 - margin.left - margin.right,
+            height = 500 - margin.top - margin.bottom;
+
+      const svg = d3.select("svg")
+        .append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+      const legend = d3.select("svg")
+        .append("g")
+        .attr("transform", `translate(${width - 150}, 20)`); 
+
+      const x = d3.scaleLinear()
+        .domain([0, d3.max(filtered, d => d.GDPPerCapita)])
+        .range([0, width]);
+
+      const y = d3.scaleLinear()
+        .domain([0, d3.max(filtered, d => d.DeathRate)])
+        .range([height, 0]);
+
+      svg.append("g")
+        .attr("transform", `translate(0,${height})`)
+        .call(d3.axisBottom(x));
+
+      svg.append("g")
+        .call(d3.axisLeft(y));
+
+        svg.selectAll(".dot")
+          .data(filtered)
+          .enter()
+          .append("circle")
+          .attr("cx", d => x(d.GDPPerCapita))
+          .attr("cy", d => y(d.DeathRate))
+          .attr("r", 5)
+          .attr("fill", d => colorScale(d.IncomeGroup))
+          .attr("opacity", 0.7)
+          .on("mouseover", function(event, d) {
+            tooltip.transition().duration(200).style("opacity", 0.95);
+            tooltip.html(
+              `<b>${d.Country}</b><br>
+               GDP per Capita: $${(+d.GDPPerCapita).toLocaleString()}<br>
+               Deaths per 100k: ${(+d.DeathRate).toFixed(1)}<br>
+               Total Deaths: ${(+d.TotalDeaths).toLocaleString()}<br>
+               Population: ${(+d.Population).toLocaleString()}<br>
+               Income Group: ${d.IncomeGroup}`
+            )
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY - 28) + "px");
+          })
+          .on("mouseout", function() {
+            tooltip.transition().duration(300).style("opacity", 0);
+          });
+
+          const incomeGroups = Array.from(new Set(filtered.map(d => d.IncomeGroup)))
+            .filter(d => d && d !== "Unknown");
+
+
+          legend.selectAll("legendDots")
+            .data(incomeGroups)
+            .enter()
+            .append("circle")
+            .attr("cx", 0)
+            .attr("cy", (d, i) => i * 20)
+            .attr("r", 6)
+            .style("fill", d => colorScale(d));
+
+          legend.selectAll("legendLabels")
+            .data(incomeGroups)
+            .enter()
+            .append("text")
+            .attr("x", 12)
+            .attr("y", (d, i) => i * 20 + 4)
+            .text(d => d)
+            .style("font-size", "12px")
+            .attr("alignment-baseline", "middle");
+  
+
+      // Labels
+      svg.append("text")
+        .attr("x", width / 2)
+        .attr("y", height + 50)
+        .attr("text-anchor", "middle")
+        .attr("class", "axis-label")
+        .text("GDP per Capita (USD)");
+
+      svg.append("text")
+        .attr("x", -height / 2)
+        .attr("y", -50)
+        .attr("transform", "rotate(-90)")
+        .attr("text-anchor", "middle")
+        .attr("class", "axis-label")
+        .text("COVID Deaths per 100k");
+    });
+    // Next Scene button
+    document.getElementById("nextSceneBtn").addEventListener("click", function() {
+    window.location.href = "scene3.html"; 
+    });
+
+    document.getElementById("nextSceneBtn").addEventListener("click", function() {
+    window.location.href = "scene3.html"; 
+    });
+
+    document.getElementById("prevSceneBtn").addEventListener("click", function() {
+    window.location.href = "scene1.html"; 
+    });
+
+  </script>
+  
+</body>
+</html>

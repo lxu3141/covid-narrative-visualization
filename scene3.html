@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>COVID Deaths Over Time</title>
+  <script src="https://d3js.org/d3.v6.min.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 30px;
+    }
+    .line {
+      fill: none;
+      stroke-width: 2.5px;
+    }
+    .dot {
+      opacity: 0;
+    }
+    .milestone {
+      stroke: black;
+      stroke-width: 1px;
+    }
+    .axis-label {
+      font-size: 14px;
+      font-weight: bold;
+    }
+    .tooltip {
+      position: absolute;
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 5px;
+      font-size: 12px;
+      pointer-events: none;
+    }
+    .legend {
+      font-size: 12px;
+    }
+    select, button {
+      margin-top: 20px;
+      padding: 6px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Cumulative COVID-19 Deaths Over Time</h2>
+  <p>
+    This chart shows how deaths accumulated in selected countries over time. You can:
+    <ul>
+      <li>Hover over dots to see daily values</li>
+      <li>Use dropdown to add/remove countries or show Global Total</li>
+      <li>Click "Replay Animation" to restart the lines</li>
+    </ul>
+  </p>
+
+  <label for="countrySelect"><b>Select Countries:</b></label><br />
+  <select id="countrySelect" multiple size="6" style="width:300px;"></select>
+  <button id="replayBtn">Replay Animation</button>
+
+  <svg width="960" height="500"></svg>
+
+  <div style="margin-top: 30px;">
+    <button id="prevSceneBtn">← Previous Scene</button>
+  </div>
+
+  <script>
+    const svg = d3.select("svg"),
+          margin = {top: 40, right: 120, bottom: 60, left: 80},
+          width = +svg.attr("width") - margin.left - margin.right,
+          height = +svg.attr("height") - margin.top - margin.bottom;
+
+    const chart = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+    const tooltip = d3.select("body").append("div").attr("class", "tooltip").style("opacity", 0);
+    const parseDate = d3.timeParse("%m/%d/%y");
+
+    Promise.all([
+      d3.csv("scene3_timeseries.csv"),
+    ]).then(([raw]) => {
+      const countries = Object.keys(raw[0]).slice(1).filter(d => d !== "Date");
+      const dates = raw.map(d => parseDate(d.Date));
+
+      const data = raw.map(d => {
+        const date = parseDate(d.Date);
+        const result = { date: date };
+        countries.forEach(c => result[c] = +d[c]);
+        result["Global"] = countries.reduce((sum, c) => sum + (+d[c] || 0), 0);
+        return result;
+      });
+
+      const x = d3.scaleTime().domain(d3.extent(data, d => d.date)).range([0, width]);
+      const y = d3.scaleLinear().domain([0, d3.max(data, d => d.Global)]).nice().range([height, 0]);
+      const color = d3.scaleOrdinal(d3.schemeCategory10).domain(countries.concat("Global"));
+
+      chart.append("g").attr("transform", `translate(0,${height})`).call(d3.axisBottom(x));
+      chart.append("g").call(d3.axisLeft(y));
+
+      chart.append("text").attr("x", width / 2).attr("y", height + 45)
+        .attr("text-anchor", "middle").attr("class", "axis-label").text("Date");
+      chart.append("text").attr("x", -height / 2).attr("y", -60)
+        .attr("transform", "rotate(-90)").attr("text-anchor", "middle")
+        .attr("class", "axis-label").text("Cumulative Deaths");
+
+      const line = d3.line().x(d => x(d.date));
+
+      function drawLines(selected) {
+        chart.selectAll(".line, .dot, .milestone, .legend").remove();
+
+        selected.forEach(country => {
+          const countryLine = line.y(d => y(d[country]));
+
+          // Animate line
+          const path = chart.append("path")
+            .datum(data)
+            .attr("fill", "none")
+            .attr("stroke", color(country))
+            .attr("class", "line")
+            .attr("d", countryLine);
+
+          const totalLength = path.node().getTotalLength();
+          path.attr("stroke-dasharray", `${totalLength} ${totalLength}`)
+              .attr("stroke-dashoffset", totalLength)
+              .transition().duration(5000).ease(d3.easeLinear)
+              .attr("stroke-dashoffset", 0);
+
+          // Add tooltip dots
+          chart.selectAll(".dot-" + country)
+            .data(data)
+            .enter().append("circle")
+            .attr("class", "dot dot-" + country)
+            .attr("cx", d => x(d.date))
+            .attr("cy", d => y(d[country]))
+            .attr("r", 3)
+            .attr("fill", color(country))
+            .on("mouseover", (event, d) => {
+              tooltip.transition().duration(200).style("opacity", 0.95);
+              tooltip.html(`<b>${country}</b><br>${d.date.toDateString()}<br>Deaths: ${d[country].toLocaleString()}`)
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 28) + "px");
+            })
+            .on("mouseout", () => tooltip.transition().duration(300).style("opacity", 0));
+        });
+
+        // Milestones on Global
+        const global = data.map(d => d.Global);
+        const maxIdx = global.indexOf(d3.max(global));
+        const milestoneDate = data[maxIdx].date;
+        const milestoneValue = data[maxIdx].Global;
+
+        chart.append("circle")
+          .attr("class", "milestone")
+          .attr("cx", x(milestoneDate))
+          .attr("cy", y(milestoneValue))
+          .attr("r", 6)
+          .attr("fill", "black")
+          .on("mouseover", (event) => {
+            tooltip.transition().duration(200).style("opacity", 0.95);
+            tooltip.html(`<b>Global Peak</b><br>${milestoneDate.toDateString()}<br>Deaths: ${milestoneValue.toLocaleString()}<br><i>(The day with the largest increase)</i>`)
+              .style("left", (event.pageX + 10) + "px")
+              .style("top", (event.pageY - 28) + "px");
+          })
+          .on("mouseout", () => tooltip.transition().duration(300).style("opacity", 0));
+      }
+
+      // Dropdown
+      const countrySelect = d3.select("#countrySelect");
+      countrySelect.append("option").text("Global Total").attr("value", "__GLOBAL__");
+      countrySelect.append("option").text("All Countries").attr("value", "__ALL__");
+      countries.forEach(c => countrySelect.append("option").text(c).attr("value", c));
+
+      const update = () => {
+        let selected = Array.from(countrySelect.node().selectedOptions).map(d => d.value);
+        if (selected.includes("__ALL__")) {
+          selected = countries.concat("Global");
+        } else if (selected.includes("__GLOBAL__")) {
+          selected = ["Global"];
+        }
+        drawLines(selected);
+      };
+
+      countrySelect.on("change", update);
+      document.getElementById("replayBtn").addEventListener("click", update);
+
+
+      countrySelect.selectAll("option").property("selected", d =>
+        ["__GLOBAL__", "US", "India", "Brazil", "Russia", "Mexico"].includes(d.value)
+      );
+      update();
+    });
+
+    document.getElementById("prevSceneBtn").addEventListener("click", function() {
+      window.location.href = "scene2.html";
+    });
+  </script>
+</body>
+</html>
